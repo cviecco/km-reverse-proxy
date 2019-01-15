@@ -15,6 +15,7 @@ type BaseConfig struct {
 	TLSKeyFilename              string `yaml:"tls_key_filename"`
 	ReverseProxyURL             string `yaml:"reverse_proxy_url"`
 	ClientCAFilename            string `yaml:"client_ca_filename"`
+	PathConfigLocation          string `yaml:"path_config_location"`
 	ClusterSharedSecretFilename string `yaml:"cluster_shared_secret_filename"`
 	SharedSecrets               []string
 }

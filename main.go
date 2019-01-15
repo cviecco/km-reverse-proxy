@@ -24,6 +24,8 @@ func main() {
 		log.Fatalf("Cannot load Configuration: %s\n", err)
 	}
 
+	//log.Printf("%+v", staticConfig)
+
 	origin, err := url.Parse(staticConfig.Base.ReverseProxyURL)
 	if err != nil {
 		panic(err)
@@ -38,7 +40,13 @@ func main() {
 
 	proxy := &httputil.ReverseProxy{Director: director}
 
-	authN := NewAuthNHandler(proxy, staticConfig.OpenID, staticConfig.Base.SharedSecrets)
+	authZ := NewAuthZHandler(proxy, staticConfig.Base.PathConfigLocation)
+	err = authZ.(*AuthZHandler).LoadConfig()
+	if err != nil {
+		panic(err)
+	}
+
+	authN := NewAuthNHandler(authZ, staticConfig.OpenID, staticConfig.Base.SharedSecrets)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		authN.ServeHTTP(w, r)
