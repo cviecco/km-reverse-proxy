@@ -11,6 +11,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"time"
+
+	"github.com/cviecco/km-reverse-proxy/authnHandler"
 )
 
 var (
@@ -46,7 +48,7 @@ func main() {
 		panic(err)
 	}
 
-	authN := NewAuthNHandler(authZ, staticConfig.OpenID, staticConfig.Base.SharedSecrets)
+	authN := authnHandler.NewAuthNHandler(authZ, staticConfig.OpenID, staticConfig.Base.SharedSecrets)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		authN.ServeHTTP(w, r)

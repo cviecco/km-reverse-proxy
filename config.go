@@ -6,6 +6,7 @@ import (
 	"os"
 
 	//"github.com/Symantec/cloud-gate/lib/constants"
+	"github.com/cviecco/km-reverse-proxy/authnHandler"
 	"gopkg.in/yaml.v2"
 )
 
@@ -20,6 +21,7 @@ type BaseConfig struct {
 	SharedSecrets               []string
 }
 
+/*
 type OpenIDConfig struct {
 	ClientID     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
@@ -29,6 +31,7 @@ type OpenIDConfig struct {
 	UserinfoURL  string `yaml:"userinfo_url"`
 	Scopes       string `yaml:"scopes"`
 }
+*/
 
 type UserInfoLDAPSource struct {
 	BindUsername       string   `yaml:"bind_username"`
@@ -42,7 +45,7 @@ type UserInfoLDAPSource struct {
 
 type StaticConfiguration struct {
 	Base   BaseConfig
-	OpenID OpenIDConfig
+	OpenID authnHandler.OpenIDConfig
 	Ldap   UserInfoLDAPSource
 }
 
