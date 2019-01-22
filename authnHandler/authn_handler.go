@@ -362,7 +362,7 @@ func NewAuthNHandler(handler http.Handler, openIDConfig OpenIDConfig, sharedSecr
 }
 
 func (h *AuthNHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Inside the handler path=%s", r.URL.Path)
+	//log.Printf("Inside the handler path=%s", r.URL.Path)
 	if strings.HasPrefix(r.URL.Path, oauth2redirectPath) {
 		h.oauth2RedirectPathHandler(w, r)
 		return
