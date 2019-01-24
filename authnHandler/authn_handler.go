@@ -86,24 +86,49 @@ func randomStringGeneration() (string, error) {
 	return base64.URLEncoding.EncodeToString(bytes), nil
 }
 
-func (h *AuthNHandler) setAndStoreAuthCookie(w http.ResponseWriter, username string) error {
+// Generates a valid auth cookie that can be used by clients, should only be used
+// by users of the lib in their test functions
+func (h *AuthNHandler) GenValidAuthCookie(username string) (*http.Cookie, error) {
+	expires := time.Now().Add(time.Hour * cookieExpirationHours)
+	return h.genValidAuthCookieExpiration(username, expires)
+}
+
+func (h *AuthNHandler) genValidAuthCookieExpiration(username string, expires time.Time) (*http.Cookie, error) {
 	randomString, err := randomStringGeneration()
 	if err != nil {
 		log.Println(err)
-		return err
+		return nil, err
 	}
-	expires := time.Now().Add(time.Hour * cookieExpirationHours)
-
 	userCookie := http.Cookie{Name: h.authCookieName, Value: randomString, Path: "/", Expires: expires, HttpOnly: true, Secure: true}
-
-	http.SetCookie(w, &userCookie)
-
 	Cookieinfo := AuthCookie{username, userCookie.Expires}
 
 	h.cookieMutex.Lock()
 	h.authCookie[userCookie.Value] = Cookieinfo
 	h.cookieMutex.Unlock()
+	return &userCookie, nil
+}
+
+func (h *AuthNHandler) setAndStoreAuthCookie(w http.ResponseWriter, username string) error {
+	userCookie, err := h.GenValidAuthCookie(username)
+	if err != nil {
+		return err
+
+		http.SetCookie(w, userCookie)
+	}
 	return nil
+}
+
+func (h *AuthNHandler) performStateCleanup(secsBetweenCleanup int) {
+	for {
+		h.cookieMutex.Lock()
+		for key, authCookie := range h.authCookie {
+			if authCookie.ExpiresAt.Before(time.Now()) {
+				delete(h.authCookie, key)
+			}
+		}
+		h.cookieMutex.Unlock()
+		time.Sleep(time.Duration(secsBetweenCleanup) * time.Second)
+	}
 }
 
 func (h *AuthNHandler) getRedirURL(r *http.Request) string {
@@ -348,8 +373,10 @@ func (h *AuthNHandler) getRemoteUserName(w http.ResponseWriter, r *http.Request)
 	return authInfo.Username, nil
 }
 
+const SecondsBetweenCleanup = 30
+
 func NewAuthNHandler(handler http.Handler, openIDConfig OpenIDConfig, sharedSecrets []string) http.Handler {
-	return &AuthNHandler{
+	rvalue := AuthNHandler{
 		handler:        handler,
 		authCookieName: cookieNamePrefix,
 		authCookie:     make(map[string]AuthCookie),
@@ -359,6 +386,8 @@ func NewAuthNHandler(handler http.Handler, openIDConfig OpenIDConfig, sharedSecr
 			Timeout: time.Second * 15,
 		},
 	}
+	go rvalue.performStateCleanup(SecondsBetweenCleanup)
+	return &rvalue
 }
 
 func (h *AuthNHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
