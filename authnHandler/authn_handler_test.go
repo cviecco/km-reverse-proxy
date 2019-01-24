@@ -142,3 +142,28 @@ func TestGetRemoteUserNameHandler(t *testing.T) {
 	}, http.StatusOK)
 
 }
+
+func TestAutnnHandlerValid(t *testing.T) {
+	sharedSecrets := []string{"secret"}
+	openIDConfig := OpenIDConfig{}
+	handler := NewAuthNHandler(NewTestHandler(), openIDConfig, sharedSecrets)
+
+	//now success with valid cookie
+	goodCookieReq, err := http.NewRequest("GET", "/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const testUsername = "username"
+	validCookie, err := handler.(*AuthNHandler).GenValidAuthCookie(testUsername)
+	if err != nil {
+		t.Fatal(err)
+	}
+	goodCookieReq.AddCookie(validCookie)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, goodCookieReq)
+	if rr.Code != http.StatusOK {
+		t.Fatal("Authentication Failed")
+	}
+
+}
