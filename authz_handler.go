@@ -9,7 +9,7 @@ import (
 	"path"
 	"sort"
 	"strings"
-	//"sync"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -34,9 +34,8 @@ type AuthZHandler struct {
 	handler        http.Handler
 	configLocation string
 	currentConfig  *AuthZConfiguration
-	//TODO: mutex
-
-	userInfo map[string]UserInfoCacheEntry
+	userinfoMutex  sync.Mutex
+	userInfo       map[string]UserInfoCacheEntry
 }
 
 func (h *AuthZHandler) LoadConfig() error {
@@ -87,7 +86,9 @@ func (h *AuthZHandler) getUserGroups_os(username string) ([]string, error) {
 
 func (h *AuthZHandler) getUserGroups(username string) ([]string, error) {
 	//try from cache
+	h.userinfoMutex.Lock()
 	userinfo, ok := h.userInfo[username]
+	h.userinfoMutex.Unlock()
 	if ok && userinfo.Expiration.After(time.Now()) {
 		return userinfo.Groups, nil
 	}
@@ -97,7 +98,9 @@ func (h *AuthZHandler) getUserGroups(username string) ([]string, error) {
 	}
 	userinfo.Groups = usergroups
 	userinfo.Expiration = time.Now().Add(time.Second * 120)
+	h.userinfoMutex.Lock()
 	h.userInfo[username] = userinfo
+	defer h.userinfoMutex.Unlock()
 	return usergroups, nil
 
 }
