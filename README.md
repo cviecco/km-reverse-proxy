@@ -1,7 +1,12 @@
 # km-reverse-proxy
 
+[![Build Status](https://travis-ci.org/cviecco/km-reverse-proxy.svg?branch=master)](https://travis-ci.org/cviecco/km-reverse-proxy)
+
 This is a simple revse proxy to use with Symantec's [keymaster][https://github.com/Symantec/keymaster] or
-any other openid connect compliant identity service or any cerificate based identity service.
+any other openid connect compliant identity service or any cerificate based identity service. The goal
+of this project is to make integration of keymaster into other running services easier by providing
+a fast a simple reverse proxy to replace their apache/nginx reverse proxies or to allow them if no authentication
+is available.
 
 It provides authentication using certificates or openid connect and can also supply coarse authorization
 using ldap groups (by coarse this means path based authorization).
