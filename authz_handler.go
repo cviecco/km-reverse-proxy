@@ -9,7 +9,7 @@ import (
 	"path"
 	"sort"
 	"strings"
-	//"sync"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -35,8 +35,8 @@ type AuthZHandler struct {
 	configLocation string
 	currentConfig  *AuthZConfiguration
 	//TODO: mutex
-
-	userInfo map[string]UserInfoCacheEntry
+	userinfoMutex sync.Mutex
+	userInfo      map[string]UserInfoCacheEntry
 }
 
 func (h *AuthZHandler) LoadConfig() error {
