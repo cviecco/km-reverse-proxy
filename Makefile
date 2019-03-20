@@ -24,7 +24,7 @@ ${BINARY}-${VERSION}.tar.gz:
 	rsync -av --exclude="config.yml" --exclude="*.pem" --exclude="*.out" lib/ ${BINARY}-${VERSION}/lib/
 	rsync -av --exclude="config.yml" --exclude="*.pem" --exclude="*.out" --exclude="*.key" cmd/ ${BINARY}-${VERSION}/cmd/
 	rsync -av  misc/ ${BINARY}-${VERSION}/misc/
-	cp LICENSE Makefile cloud-gate.spec README.md ${BINARY}-${VERSION}/
+	cp LICENSE Makefile km-reverse-proxy.spec README.md ${BINARY}-${VERSION}/
 	tar -cvzf ${BINARY}-${VERSION}.tar.gz ${BINARY}-${VERSION}/
 	rm -rf ${BINARY}-${VERSION}/
 
