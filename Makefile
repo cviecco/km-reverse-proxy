@@ -8,8 +8,8 @@ BINARY=km-reverse-proxy
 VERSION=0.1.0
 
 all:
-	#@cd $(GOPATH)/src; go install github.com/Symantec/cloud-gate/cmd/*
-	go build
+	cd $(GOPATH)/src; go install github.com/cviecco/km-reverse-proxy/cmd/*
+	#cd cmd/km-reverse-proxy; go build
 
 
 get-deps:
@@ -18,13 +18,14 @@ get-deps:
 clean:
 	rm -f bin/*
 	rm -f km-reverse-proxy-*.tar.gz
+	rm -f cmd/km-reverse-proxy/km-reverse-proxy
 
 ${BINARY}-${VERSION}.tar.gz:
 	mkdir ${BINARY}-${VERSION}
-	rsync -av --exclude="config.yml" --exclude="*.pem" --exclude="*.out" lib/ ${BINARY}-${VERSION}/lib/
-	rsync -av --exclude="config.yml" --exclude="*.pem" --exclude="*.out" --exclude="*.key" cmd/ ${BINARY}-${VERSION}/cmd/
+	rsync -av --exclude="config.yml" --exclude="*.pem" --exclude="*.out" authnHandler/ ${BINARY}-${VERSION}/authnHandler/
+	rsync -av --exclude="*.yml" --exclude="*.pem" --exclude="*.out" --exclude="*.key" --exclude="*.txt"  cmd/ ${BINARY}-${VERSION}/cmd/
 	rsync -av  misc/ ${BINARY}-${VERSION}/misc/
-	cp LICENSE Makefile cloud-gate.spec README.md ${BINARY}-${VERSION}/
+	cp LICENSE Makefile km-reverse-proxy.spec README.md ${BINARY}-${VERSION}/
 	tar -cvzf ${BINARY}-${VERSION}.tar.gz ${BINARY}-${VERSION}/
 	rm -rf ${BINARY}-${VERSION}/
 
