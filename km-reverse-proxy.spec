@@ -30,9 +30,9 @@ make
 
 %install
 #%make_install
-%{__install} -Dp -m0755 ~/go/bin/cloud-gate %{buildroot}%{_bindir}/cloud-gate
+%{__install} -Dp -m0755 ~/go/bin/km-reverse-proxy %{buildroot}%{_bindir}/km-reverse-proxy
 install -d %{buildroot}/usr/lib/systemd/system
-install -p -m 0644 misc/startup/km-reverse-proxy.service %{buildroot}/usr/lib/systemd/system/cloud-gate.service
+install -p -m 0644 misc/startup/km-reverse-proxy.service %{buildroot}/usr/lib/systemd/system/km-reverse-proxy.service
 
 %pre
 /usr/bin/getent passwd km-reverse-proxy || useradd -d /var/lib/km-reverse-proxy -s /bin/false -U -r  km-reverse-proxy
