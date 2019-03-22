@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Symantec/keymaster/lib/authutil"
+
 	"gopkg.in/yaml.v2"
 )
 
@@ -36,6 +38,7 @@ type AuthZHandler struct {
 	currentConfig  *AuthZConfiguration
 	userinfoMutex  sync.Mutex
 	userInfo       map[string]UserInfoCacheEntry
+	ldapConfig     *UserInfoLDAPSource
 }
 
 func (h *AuthZHandler) LoadConfig() error {
@@ -83,6 +86,44 @@ func (h *AuthZHandler) getUserGroups_os(username string) ([]string, error) {
 	}
 	return groupNames, nil
 }
+func (h *AuthZHandler) getUserGroupsLDAP(username string) ([]string, error) {
+	ldapConfig := h.ldapConfig
+	var timeoutSecs uint
+	timeoutSecs = 2
+	//for _, ldapUrl := range ldapConfig.LDAPTargetURLs {
+	for _, ldapUrl := range strings.Split(ldapConfig.LDAPTargetURLs, ",") {
+		if len(ldapUrl) < 1 {
+			continue
+		}
+		u, err := authutil.ParseLDAPURL(ldapUrl)
+		if err != nil {
+			log.Printf("Failed to parse ldapurl '%s'", ldapUrl)
+			continue
+		}
+		groups, err := authutil.GetLDAPUserGroups(*u,
+			ldapConfig.BindUsername, ldapConfig.BindPassword,
+			timeoutSecs, nil, username,
+			ldapConfig.UserSearchBaseDNs, ldapConfig.UserSearchFilter)
+		if err != nil {
+			continue
+		}
+		return groups, nil
+
+	}
+	if ldapConfig.LDAPTargetURLs == "" {
+		var emptyGroup []string
+		return emptyGroup, nil
+	}
+	err := errors.New("error getting the groups")
+	return nil, err
+}
+
+func (h *AuthZHandler) getUserGroupsAny(username string) ([]string, error) {
+	if h.ldapConfig != nil && h.ldapConfig.LDAPTargetURLs != "" {
+		return h.getUserGroupsLDAP(username)
+	}
+	return h.getUserGroups_os(username)
+}
 
 func (h *AuthZHandler) getUserGroups(username string) ([]string, error) {
 	//try from cache
@@ -92,7 +133,7 @@ func (h *AuthZHandler) getUserGroups(username string) ([]string, error) {
 	if ok && userinfo.Expiration.After(time.Now()) {
 		return userinfo.Groups, nil
 	}
-	usergroups, err := h.getUserGroups_os(username)
+	usergroups, err := h.getUserGroupsAny(username)
 	if err != nil {
 		return userinfo.Groups, nil
 	}
@@ -123,7 +164,7 @@ func (h *AuthZHandler) canUserAccessRequest(username string, r *http.Request) (b
 				continue
 			}
 			if pathConfig.AllowedGroups[groupIndex] == groupName {
-				log.Printf("allowedGroup=%s, gropIndex=%d, allowedGroups=%s", groupName, groupIndex, pathConfig.AllowedGroups)
+				//log.Printf("allowedGroup=%s, gropIndex=%d, allowedGroups=%s", groupName, groupIndex, pathConfig.AllowedGroups)
 				return true, nil
 			}
 		}
@@ -132,16 +173,17 @@ func (h *AuthZHandler) canUserAccessRequest(username string, r *http.Request) (b
 	return false, nil
 }
 
-func NewAuthZHandler(handler http.Handler, configLocation string) http.Handler {
+func NewAuthZHandler(handler http.Handler, configLocation string, ldapConfig *UserInfoLDAPSource) http.Handler {
 	return &AuthZHandler{
 		handler:        handler,
 		configLocation: configLocation,
 		userInfo:       make(map[string]UserInfoCacheEntry),
+		ldapConfig:     ldapConfig,
 	}
 }
 
 func (h *AuthZHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Inside the handler (auntz) path=%s", r.URL.Path)
+	//log.Printf("Inside the handler (auntz) path=%s", r.URL.Path)
 
 	authUser := r.Header.Get("X-Remote-User")
 	if authUser == "" {

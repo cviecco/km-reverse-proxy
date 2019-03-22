@@ -42,7 +42,7 @@ func main() {
 
 	proxy := &httputil.ReverseProxy{Director: director}
 
-	authZ := NewAuthZHandler(proxy, staticConfig.Base.PathConfigLocation)
+	authZ := NewAuthZHandler(proxy, staticConfig.Base.PathConfigLocation, &staticConfig.Ldap)
 	err = authZ.(*AuthZHandler).LoadConfig()
 	if err != nil {
 		panic(err)
