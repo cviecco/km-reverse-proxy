@@ -112,9 +112,8 @@ func (h *AuthNHandler) setAndStoreAuthCookie(w http.ResponseWriter, username str
 	userCookie, err := h.GenValidAuthCookie(username)
 	if err != nil {
 		return err
-
-		http.SetCookie(w, userCookie)
 	}
+	http.SetCookie(w, userCookie)
 	return nil
 }
 
@@ -391,7 +390,7 @@ func NewAuthNHandler(handler http.Handler, openIDConfig OpenIDConfig, sharedSecr
 }
 
 func (h *AuthNHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	//log.Printf("Inside the handler path=%s", r.URL.Path)
+	//log.Printf("Inside the handler path=%s redir=%s", r.URL.Path, oauth2redirectPath)
 	if strings.HasPrefix(r.URL.Path, oauth2redirectPath) {
 		h.oauth2RedirectPathHandler(w, r)
 		return
