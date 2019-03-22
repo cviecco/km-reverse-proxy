@@ -103,7 +103,8 @@ func (h *AuthZHandler) getUserGroupsLDAP(username string) ([]string, error) {
 		groups, err := authutil.GetLDAPUserGroups(*u,
 			ldapConfig.BindUsername, ldapConfig.BindPassword,
 			timeoutSecs, nil, username,
-			ldapConfig.UserSearchBaseDNs, ldapConfig.UserSearchFilter)
+			ldapConfig.UserSearchBaseDNs, ldapConfig.UserSearchFilter,
+			ldapConfig.GroupSearchBaseDNs, ldapConfig.GroupSearchFilter)
 		if err != nil {
 			continue
 		}
