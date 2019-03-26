@@ -28,7 +28,7 @@ type OpenIDConfig struct {
 	Scopes       string `yaml:"scopes"`
 }
 
-type AuthCookie struct {
+type AuthInfo struct {
 	Username  string
 	ExpiresAt time.Time
 }
@@ -36,7 +36,7 @@ type AuthCookie struct {
 type AuthNHandler struct {
 	handler        http.Handler
 	openID         OpenIDConfig
-	authCookie     map[string]AuthCookie
+	authCookie     map[string]AuthInfo
 	cookieMutex    sync.Mutex
 	authCookieName string
 	netClient      *http.Client
@@ -100,7 +100,7 @@ func (h *AuthNHandler) genValidAuthCookieExpiration(username string, expires tim
 		return nil, err
 	}
 	userCookie := http.Cookie{Name: h.authCookieName, Value: randomString, Path: "/", Expires: expires, HttpOnly: true, Secure: true}
-	Cookieinfo := AuthCookie{username, userCookie.Expires}
+	Cookieinfo := AuthInfo{username, userCookie.Expires}
 
 	h.cookieMutex.Lock()
 	h.authCookie[userCookie.Value] = Cookieinfo
@@ -108,8 +108,8 @@ func (h *AuthNHandler) genValidAuthCookieExpiration(username string, expires tim
 	return &userCookie, nil
 }
 
-func (h *AuthNHandler) setAndStoreAuthCookie(w http.ResponseWriter, username string) error {
-	userCookie, err := h.GenValidAuthCookie(username)
+func (h *AuthNHandler) setAndStoreAuthCookie(w http.ResponseWriter, username string, expires time.Time) error {
+	userCookie, err := h.genValidAuthCookieExpiration(username, expires)
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func (h *AuthNHandler) generateValidStateString(r *http.Request) (string, error)
 	sig, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.HS256, Key: key}, (&jose.SignerOptions{}).WithType("JWT"))
 	if err != nil {
 		log.Printf("err=%s", err)
-		//http.Error(w, "Internal Error ", http.StatusInternalServerError)
+		//http.Error(w, "Internal Errorrn "http.StatusInternalServerError)
 		return "", err
 	}
 	issuer := r.Host
@@ -331,7 +331,7 @@ func (h *AuthNHandler) oauth2RedirectPathHandler(w http.ResponseWriter, r *http.
 	}
 	username := getUsernameFromUserinfo(userInfo)
 
-	err = h.setAndStoreAuthCookie(w, username)
+	err = h.setAndStoreAuthCookie(w, username, time.Unix(int64(oauth2AccessToken.ExpiresIn), 0))
 	if err != nil {
 		log.Println(err)
 		http.Error(w, "cannot set auth Cookie", http.StatusInternalServerError)
@@ -340,6 +340,14 @@ func (h *AuthNHandler) oauth2RedirectPathHandler(w http.ResponseWriter, r *http.
 
 	destinationPath := inboundJWT.ReturnURL
 	http.Redirect(w, r, destinationPath, http.StatusFound)
+}
+
+func (h *AuthNHandler) verifyAuthnCookie(cookieValue string) (AuthInfo, bool, error) {
+	h.cookieMutex.Lock()
+	defer h.cookieMutex.Unlock()
+	authInfo, ok := h.authCookie[cookieValue]
+	return authInfo, ok, nil
+
 }
 
 func (h *AuthNHandler) getRemoteUserName(w http.ResponseWriter, r *http.Request) (string, error) {
@@ -357,9 +365,11 @@ func (h *AuthNHandler) getRemoteUserName(w http.ResponseWriter, r *http.Request)
 		h.oauth2DoRedirectoToProviderHandler(w, r)
 		return "", err
 	}
-	h.cookieMutex.Lock()
-	defer h.cookieMutex.Unlock()
-	authInfo, ok := h.authCookie[remoteCookie.Value]
+
+	authInfo, ok, err := h.verifyAuthnCookie(remoteCookie.Value)
+	if err != nil {
+		return "", err
+	}
 
 	if !ok {
 		h.oauth2DoRedirectoToProviderHandler(w, r)
@@ -378,7 +388,7 @@ func NewAuthNHandler(handler http.Handler, openIDConfig OpenIDConfig, sharedSecr
 	rvalue := AuthNHandler{
 		handler:        handler,
 		authCookieName: cookieNamePrefix,
-		authCookie:     make(map[string]AuthCookie),
+		authCookie:     make(map[string]AuthInfo),
 		openID:         openIDConfig,
 		SharedSecrets:  sharedSecrets,
 		netClient: &http.Client{
