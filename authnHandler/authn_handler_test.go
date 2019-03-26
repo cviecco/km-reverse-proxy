@@ -1,6 +1,8 @@
 package authnHandler
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -8,6 +10,16 @@ import (
 	"net/url"
 	"testing"
 )
+
+func randomStringGeneration() (string, error) {
+	const size = 32
+	bytes := make([]byte, size)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(bytes), nil
+}
 
 type TestHandler struct {
 }
@@ -132,6 +144,7 @@ func TestGetRemoteUserNameHandler(t *testing.T) {
 	}
 	goodCookieReq.AddCookie(validCookie)
 	_, err = checkRequestHandlerCode(goodCookieReq, func(w http.ResponseWriter, r *http.Request) {
+		r.Host = "localhost"
 		username, err := handler.(*AuthNHandler).getRemoteUserName(w, r)
 		if err != nil {
 			t.Fatal("getRemoteUsername should NOT have failed")
@@ -159,6 +172,7 @@ func TestAutnnHandlerValid(t *testing.T) {
 		t.Fatal(err)
 	}
 	goodCookieReq.AddCookie(validCookie)
+	goodCookieReq.Host = "localhost"
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, goodCookieReq)
