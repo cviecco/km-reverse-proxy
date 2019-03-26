@@ -4,6 +4,11 @@ go:
   - 1.x
 
 before_install:
-- go get ./...
+    - go get github.com/mattn/goveralls
+    - go get ./...
 
-script: make all test
+
+script:
+    - go test -v -covermode=count -coverprofile=coverage.out ./...
+    - $HOME/gopath/bin/goveralls -coverprofile=coverage.out -service=travis-ci
+    - make all test
