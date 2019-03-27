@@ -2,16 +2,14 @@ package authnHandler
 
 import (
 	"bytes"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"gopkg.in/square/go-jose.v2"
@@ -28,16 +26,19 @@ type OpenIDConfig struct {
 	Scopes       string `yaml:"scopes"`
 }
 
-type AuthCookie struct {
-	Username  string
-	ExpiresAt time.Time
+type AuthInfo struct {
+	Username   string `json:"username,omitempty"`
+	ExpiresAt  time.Time
+	Issuer     string   `json:"iss,omitempty"`
+	Subject    string   `json:"sub,omitempty"`
+	Audience   []string `json:"aud,omitempty"`
+	Expiration int64    `json:"exp,omitempty"`
+	NotBefore  int64    `json:"nbf,omitempty"`
 }
 
 type AuthNHandler struct {
 	handler        http.Handler
 	openID         OpenIDConfig
-	authCookie     map[string]AuthCookie
-	cookieMutex    sync.Mutex
 	authCookieName string
 	netClient      *http.Client
 	SharedSecrets  []string
@@ -76,58 +77,48 @@ const maxAgeSecondsRedirCookie = 120
 const redirCookieName = "oauth2_redir"
 const oauth2redirectPath = "/oauth2/redirectendpoint"
 
-func randomStringGeneration() (string, error) {
-	const size = 32
-	bytes := make([]byte, size)
-	_, err := rand.Read(bytes)
-	if err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(bytes), nil
-}
-
 // Generates a valid auth cookie that can be used by clients, should only be used
 // by users of the lib in their test functions
 func (h *AuthNHandler) GenValidAuthCookie(username string) (*http.Cookie, error) {
 	expires := time.Now().Add(time.Hour * cookieExpirationHours)
-	return h.genValidAuthCookieExpiration(username, expires)
+	return h.genValidAuthCookieExpiration(username, expires, "localhost")
 }
 
-func (h *AuthNHandler) genValidAuthCookieExpiration(username string, expires time.Time) (*http.Cookie, error) {
-	randomString, err := randomStringGeneration()
+func (h *AuthNHandler) genValidAuthCookieExpiration(
+	username string, expires time.Time, issuer string) (*http.Cookie, error) {
+	key := []byte(h.SharedSecrets[0])
+	sig, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.HS256, Key: key}, (&jose.SignerOptions{}).WithType("JWT"))
 	if err != nil {
-		log.Println(err)
+		//log.Printf("err=%s", err)
+		return nil, fmt.Errorf("genValidAuthCookieExpiration: %s", err)
+	}
+	subject := "state:" + h.authCookieName
+	authToken := AuthInfo{
+		Issuer: issuer, Subject: subject,
+		Audience:   []string{issuer},
+		Username:   username,
+		Expiration: expires.Unix(),
+	}
+	// TODO: add IssuedAt and NotBefore?
+	authToken.NotBefore = time.Now().Unix()
+	//stateToken.IssuedAt = stateToken.NotBefore
+
+	cookieValue, err := jwt.Signed(sig).Claims(authToken).CompactSerialize()
+	if err != nil {
 		return nil, err
 	}
-	userCookie := http.Cookie{Name: h.authCookieName, Value: randomString, Path: "/", Expires: expires, HttpOnly: true, Secure: true}
-	Cookieinfo := AuthCookie{username, userCookie.Expires}
 
-	h.cookieMutex.Lock()
-	h.authCookie[userCookie.Value] = Cookieinfo
-	h.cookieMutex.Unlock()
+	userCookie := http.Cookie{Name: h.authCookieName, Value: cookieValue, Path: "/", Expires: expires, HttpOnly: true, Secure: true}
 	return &userCookie, nil
 }
 
-func (h *AuthNHandler) setAndStoreAuthCookie(w http.ResponseWriter, username string) error {
-	userCookie, err := h.GenValidAuthCookie(username)
+func (h *AuthNHandler) setAndStoreAuthCookie(w http.ResponseWriter, r *http.Request, username string, expires time.Time) error {
+	userCookie, err := h.genValidAuthCookieExpiration(username, expires, r.Host)
 	if err != nil {
 		return err
 	}
 	http.SetCookie(w, userCookie)
 	return nil
-}
-
-func (h *AuthNHandler) performStateCleanup(secsBetweenCleanup int) {
-	for {
-		h.cookieMutex.Lock()
-		for key, authCookie := range h.authCookie {
-			if authCookie.ExpiresAt.Before(time.Now()) {
-				delete(h.authCookie, key)
-			}
-		}
-		h.cookieMutex.Unlock()
-		time.Sleep(time.Duration(secsBetweenCleanup) * time.Second)
-	}
 }
 
 func (h *AuthNHandler) getRedirURL(r *http.Request) string {
@@ -163,7 +154,7 @@ func (h *AuthNHandler) generateValidStateString(r *http.Request) (string, error)
 	sig, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.HS256, Key: key}, (&jose.SignerOptions{}).WithType("JWT"))
 	if err != nil {
 		log.Printf("err=%s", err)
-		//http.Error(w, "Internal Error ", http.StatusInternalServerError)
+		//http.Error(w, "Internal Errorrn "http.StatusInternalServerError)
 		return "", err
 	}
 	issuer := r.Host
@@ -331,7 +322,7 @@ func (h *AuthNHandler) oauth2RedirectPathHandler(w http.ResponseWriter, r *http.
 	}
 	username := getUsernameFromUserinfo(userInfo)
 
-	err = h.setAndStoreAuthCookie(w, username)
+	err = h.setAndStoreAuthCookie(w, r, username, time.Unix(int64(oauth2AccessToken.ExpiresIn), 0))
 	if err != nil {
 		log.Println(err)
 		http.Error(w, "cannot set auth Cookie", http.StatusInternalServerError)
@@ -340,6 +331,30 @@ func (h *AuthNHandler) oauth2RedirectPathHandler(w http.ResponseWriter, r *http.
 
 	destinationPath := inboundJWT.ReturnURL
 	http.Redirect(w, r, destinationPath, http.StatusFound)
+}
+
+func (h *AuthNHandler) verifyAuthnCookie(cookieValue string, issuer string) (AuthInfo, bool, error) {
+	if len(cookieValue) < 1 {
+		return AuthInfo{}, false, nil
+	}
+	inboundJWT := AuthInfo{}
+	tok, err := jwt.ParseSigned(cookieValue)
+	if err != nil {
+		return inboundJWT, false, nil
+	}
+	if err := h.JWTClaims(tok, &inboundJWT); err != nil {
+		log.Printf("error parsing claims err=%s", err)
+		return inboundJWT, false, nil
+	}
+	subject := "state:" + h.authCookieName
+	if inboundJWT.Issuer != issuer || inboundJWT.Subject != subject ||
+		inboundJWT.NotBefore > time.Now().Unix() || inboundJWT.Expiration < time.Now().Unix() {
+		err = errors.New("invalid JWT values")
+		return inboundJWT, false, nil
+	}
+	authInfo := inboundJWT
+	authInfo.ExpiresAt = time.Unix(inboundJWT.Expiration, 0)
+	return authInfo, true, nil
 }
 
 func (h *AuthNHandler) getRemoteUserName(w http.ResponseWriter, r *http.Request) (string, error) {
@@ -357,9 +372,11 @@ func (h *AuthNHandler) getRemoteUserName(w http.ResponseWriter, r *http.Request)
 		h.oauth2DoRedirectoToProviderHandler(w, r)
 		return "", err
 	}
-	h.cookieMutex.Lock()
-	defer h.cookieMutex.Unlock()
-	authInfo, ok := h.authCookie[remoteCookie.Value]
+
+	authInfo, ok, err := h.verifyAuthnCookie(remoteCookie.Value, r.Host)
+	if err != nil {
+		return "", err
+	}
 
 	if !ok {
 		h.oauth2DoRedirectoToProviderHandler(w, r)
@@ -372,20 +389,16 @@ func (h *AuthNHandler) getRemoteUserName(w http.ResponseWriter, r *http.Request)
 	return authInfo.Username, nil
 }
 
-const SecondsBetweenCleanup = 30
-
 func NewAuthNHandler(handler http.Handler, openIDConfig OpenIDConfig, sharedSecrets []string) http.Handler {
 	rvalue := AuthNHandler{
 		handler:        handler,
 		authCookieName: cookieNamePrefix,
-		authCookie:     make(map[string]AuthCookie),
 		openID:         openIDConfig,
 		SharedSecrets:  sharedSecrets,
 		netClient: &http.Client{
 			Timeout: time.Second * 15,
 		},
 	}
-	go rvalue.performStateCleanup(SecondsBetweenCleanup)
 	return &rvalue
 }
 
