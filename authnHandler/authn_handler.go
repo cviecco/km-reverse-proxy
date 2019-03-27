@@ -76,6 +76,7 @@ const cookieExpirationHours = 3
 const maxAgeSecondsRedirCookie = 120
 const redirCookieName = "oauth2_redir"
 const oauth2redirectPath = "/oauth2/redirectendpoint"
+const authNCookieExpirationDuration = 8 * 3600 * time.Second
 
 // Generates a valid auth cookie that can be used by clients, should only be used
 // by users of the lib in their test functions
@@ -322,7 +323,7 @@ func (h *AuthNHandler) oauth2RedirectPathHandler(w http.ResponseWriter, r *http.
 	}
 	username := getUsernameFromUserinfo(userInfo)
 
-	err = h.setAndStoreAuthCookie(w, r, username, time.Unix(int64(oauth2AccessToken.ExpiresIn), 0))
+	err = h.setAndStoreAuthCookie(w, r, username, time.Now().Add(authNCookieExpirationDuration))
 	if err != nil {
 		log.Println(err)
 		http.Error(w, "cannot set auth Cookie", http.StatusInternalServerError)
