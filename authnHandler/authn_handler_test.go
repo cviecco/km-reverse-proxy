@@ -40,17 +40,22 @@ func NewTestHandler() http.Handler {
 }
 
 type httpTestLogger struct {
-	//Username      string
+	T                *testing.T
+	ExpectedUsername string
 	//LastLogRecord *instrumentedwriter.LogRecord
 }
 
 func (l httpTestLogger) Log(record instrumentedwriter.LogRecord) {
-	//l.LastLogRecord = &record
-	//l.Username = record.Username
+	if l.T == nil {
+		fmt.Printf("%s -  %s [%s] \"%s %s %s\" %d %d \"%s\"\n",
+			record.Ip, record.Username, record.Time, record.Method,
+			record.Uri, record.Protocol, record.Status, record.Size, record.UserAgent)
+		return
 
-	fmt.Printf("%s -  %s [%s] \"%s %s %s\" %d %d \"%s\"\n",
-		record.Ip, record.Username, record.Time, record.Method,
-		record.Uri, record.Protocol, record.Status, record.Size, record.UserAgent)
+	}
+	if l.ExpectedUsername != record.Username {
+		l.T.Fatal("username doe not match")
+	}
 
 }
 
@@ -207,14 +212,16 @@ func TestAutnnHandlerValid(t *testing.T) {
 		t.Fatal("Ouath2 redirect did not failed")
 	}
 	// now we test with a wrapped handler to ensure username is set
-	l := httpTestLogger{}
+	l := httpTestLogger{
+		ExpectedUsername: testUsername,
+		T:                t,
+	}
 	wrappedHandler := instrumentedwriter.NewLoggingHandler(handler, l)
 	rr3 := httptest.NewRecorder()
 	wrappedHandler.ServeHTTP(rr3, goodCookieReq)
 	if rr3.Code != http.StatusOK {
 		t.Fatal("Authentication Failed")
 	}
-	// TODO: verify username injected is the one we expect
 
 	// finaly we put a bad cookie
 	badCookie := validCookie
