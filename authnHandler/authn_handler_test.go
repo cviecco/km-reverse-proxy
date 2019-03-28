@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/Symantec/keymaster/lib/instrumentedwriter"
 )
@@ -175,6 +176,25 @@ func TestGetRemoteUserNameHandler(t *testing.T) {
 			t.Fatal("getRemoteUsername username does NOT match")
 		}
 	}, http.StatusOK)
+
+	//Now failure with an expired Cookie
+	expiredCookieReq, err := http.NewRequest("GET", "/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiredCookie, err := handler.(*AuthNHandler).genValidAuthCookieExpiration(testUsername,
+		time.Now().Add(-10*time.Second), "localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiredCookieReq.AddCookie(expiredCookie)
+
+	_, err = checkRequestHandlerCode(expiredCookieReq, func(w http.ResponseWriter, r *http.Request) {
+		_, err := handler.(*AuthNHandler).getRemoteUserName(w, r)
+		if err == nil {
+			t.Fatal("getRemoteUsername should have failed")
+		}
+	}, http.StatusFound)
 
 }
 
