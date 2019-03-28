@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+
+	"github.com/Symantec/keymaster/lib/instrumentedwriter"
 )
 
 func randomStringGeneration() (string, error) {
@@ -35,6 +37,21 @@ func okHandler(w http.ResponseWriter, req *http.Request) {
 
 func NewTestHandler() http.Handler {
 	return &TestHandler{}
+}
+
+type httpTestLogger struct {
+	//Username      string
+	//LastLogRecord *instrumentedwriter.LogRecord
+}
+
+func (l httpTestLogger) Log(record instrumentedwriter.LogRecord) {
+	//l.LastLogRecord = &record
+	//l.Username = record.Username
+
+	fmt.Printf("%s -  %s [%s] \"%s %s %s\" %d %d \"%s\"\n",
+		record.Ip, record.Username, record.Time, record.Method,
+		record.Uri, record.Protocol, record.Status, record.Size, record.UserAgent)
+
 }
 
 func checkRequestHandlerCode(req *http.Request, handlerFunc http.HandlerFunc, expectedStatus int) (*httptest.ResponseRecorder, error) {
@@ -178,6 +195,40 @@ func TestAutnnHandlerValid(t *testing.T) {
 	handler.ServeHTTP(rr, goodCookieReq)
 	if rr.Code != http.StatusOK {
 		t.Fatal("Authentication Failed")
+	}
+	// now at should get a redirect if reaching the redirecturl
+	oauth2redirectReq, err := http.NewRequest("GET", oauth2redirectPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr2 := httptest.NewRecorder()
+	handler.ServeHTTP(rr2, oauth2redirectReq)
+	if rr2.Code != http.StatusUnauthorized {
+		t.Fatal("Ouath2 redirect did not failed")
+	}
+	// now we test with a wrapped handler to ensure username is set
+	l := httpTestLogger{}
+	wrappedHandler := instrumentedwriter.NewLoggingHandler(handler, l)
+	rr3 := httptest.NewRecorder()
+	wrappedHandler.ServeHTTP(rr3, goodCookieReq)
+	if rr3.Code != http.StatusOK {
+		t.Fatal("Authentication Failed")
+	}
+	// TODO: verify username injected is the one we expect
+
+	// finaly we put a bad cookie
+	badCookie := validCookie
+	badCookie.Value = "Foo"
+	badCookieReq, err := http.NewRequest("GET", "/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badCookieReq.AddCookie(validCookie)
+	badCookieReq.Host = "localhost"
+	rr4 := httptest.NewRecorder()
+	handler.ServeHTTP(rr4, badCookieReq)
+	if rr4.Code != http.StatusFound {
+		t.Fatal("Bad cookie should redirect")
 	}
 
 }

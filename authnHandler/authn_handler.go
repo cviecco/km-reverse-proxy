@@ -29,8 +29,7 @@ type OpenIDConfig struct {
 }
 
 type AuthInfo struct {
-	Username   string `json:"username,omitempty"`
-	ExpiresAt  time.Time
+	Username   string   `json:"username,omitempty"`
 	Issuer     string   `json:"iss,omitempty"`
 	Subject    string   `json:"sub,omitempty"`
 	Audience   []string `json:"aud,omitempty"`
@@ -356,7 +355,6 @@ func (h *AuthNHandler) verifyAuthnCookie(cookieValue string, issuer string) (Aut
 		return inboundJWT, false, nil
 	}
 	authInfo := inboundJWT
-	authInfo.ExpiresAt = time.Unix(inboundJWT.Expiration, 0)
 	return authInfo, true, nil
 }
 
@@ -384,10 +382,6 @@ func (h *AuthNHandler) getRemoteUserName(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		h.oauth2DoRedirectoToProviderHandler(w, r)
 		return "", errors.New("Cookie not found")
-	}
-	if authInfo.ExpiresAt.Before(time.Now()) {
-		h.oauth2DoRedirectoToProviderHandler(w, r)
-		return "", errors.New("Expired Cookie")
 	}
 	return authInfo.Username, nil
 }
