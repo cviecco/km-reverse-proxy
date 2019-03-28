@@ -9,6 +9,9 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
+
+	"github.com/Symantec/keymaster/lib/instrumentedwriter"
 )
 
 func randomStringGeneration() (string, error) {
@@ -35,6 +38,26 @@ func okHandler(w http.ResponseWriter, req *http.Request) {
 
 func NewTestHandler() http.Handler {
 	return &TestHandler{}
+}
+
+type httpTestLogger struct {
+	T                *testing.T
+	ExpectedUsername string
+	//LastLogRecord *instrumentedwriter.LogRecord
+}
+
+func (l httpTestLogger) Log(record instrumentedwriter.LogRecord) {
+	if l.T == nil {
+		fmt.Printf("%s -  %s [%s] \"%s %s %s\" %d %d \"%s\"\n",
+			record.Ip, record.Username, record.Time, record.Method,
+			record.Uri, record.Protocol, record.Status, record.Size, record.UserAgent)
+		return
+
+	}
+	if l.ExpectedUsername != record.Username {
+		l.T.Fatal("username doe not match")
+	}
+
 }
 
 func checkRequestHandlerCode(req *http.Request, handlerFunc http.HandlerFunc, expectedStatus int) (*httptest.ResponseRecorder, error) {
@@ -154,6 +177,25 @@ func TestGetRemoteUserNameHandler(t *testing.T) {
 		}
 	}, http.StatusOK)
 
+	//Now failure with an expired Cookie
+	expiredCookieReq, err := http.NewRequest("GET", "/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiredCookie, err := handler.(*AuthNHandler).genValidAuthCookieExpiration(testUsername,
+		time.Now().Add(-10*time.Second), "localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiredCookieReq.AddCookie(expiredCookie)
+
+	_, err = checkRequestHandlerCode(expiredCookieReq, func(w http.ResponseWriter, r *http.Request) {
+		_, err := handler.(*AuthNHandler).getRemoteUserName(w, r)
+		if err == nil {
+			t.Fatal("getRemoteUsername should have failed")
+		}
+	}, http.StatusFound)
+
 }
 
 func TestAutnnHandlerValid(t *testing.T) {
@@ -178,6 +220,42 @@ func TestAutnnHandlerValid(t *testing.T) {
 	handler.ServeHTTP(rr, goodCookieReq)
 	if rr.Code != http.StatusOK {
 		t.Fatal("Authentication Failed")
+	}
+	// now at should get a redirect if reaching the redirecturl
+	oauth2redirectReq, err := http.NewRequest("GET", oauth2redirectPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr2 := httptest.NewRecorder()
+	handler.ServeHTTP(rr2, oauth2redirectReq)
+	if rr2.Code != http.StatusUnauthorized {
+		t.Fatal("Ouath2 redirect did not failed")
+	}
+	// now we test with a wrapped handler to ensure username is set
+	l := httpTestLogger{
+		ExpectedUsername: testUsername,
+		T:                t,
+	}
+	wrappedHandler := instrumentedwriter.NewLoggingHandler(handler, l)
+	rr3 := httptest.NewRecorder()
+	wrappedHandler.ServeHTTP(rr3, goodCookieReq)
+	if rr3.Code != http.StatusOK {
+		t.Fatal("Authentication Failed")
+	}
+
+	// finaly we put a bad cookie
+	badCookie := validCookie
+	badCookie.Value = "Foo"
+	badCookieReq, err := http.NewRequest("GET", "/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badCookieReq.AddCookie(validCookie)
+	badCookieReq.Host = "localhost"
+	rr4 := httptest.NewRecorder()
+	handler.ServeHTTP(rr4, badCookieReq)
+	if rr4.Code != http.StatusFound {
+		t.Fatal("Bad cookie should redirect")
 	}
 
 }
