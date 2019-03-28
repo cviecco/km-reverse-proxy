@@ -95,6 +95,10 @@ func LoadVerifyConfigFile(configFilename string) (*StaticConfiguration, error) {
 		config.Base.ServicePort = 22443
 		//constants.DefaultStatusPort
 	}
+	if config.Base.LogDirectory == "" {
+		config.Base.LogDirectory = "/tmp"
+		//constants.DefaultStatusPort
+	}
 	/*
 	   if len(config.Base.AccountConfigurationUrl) == 0 {
 	           config.Base.AccountConfigurationUrl =

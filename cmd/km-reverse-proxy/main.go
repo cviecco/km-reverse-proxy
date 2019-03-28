@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"path/filepath"
 	"time"
 
 	"github.com/Symantec/keymaster/lib/instrumentedwriter"
@@ -40,17 +41,15 @@ func main() {
 		log.Fatalf("Cannot load Configuration: %s\n", err)
 	}
 
-	//log.Printf("%+v", staticConfig)
-
 	l := &lumberjack.Logger{
-		Filename:   staticConfig.Base.LogDirectory + "/access",
+		Filename:   filepath.Join(staticConfig.Base.LogDirectory, "access"),
 		MaxSize:    20, // megabytes
 		MaxBackups: 3,
 		MaxAge:     28,   //days
 		Compress:   true, // disabled by default
 	}
 
-	accessLogger := httpLogger{AccessLogger: log.New(l, "", log.Lshortfile)}
+	accessLogger := httpLogger{AccessLogger: log.New(l, "", 0)}
 
 	origin, err := url.Parse(staticConfig.Base.ReverseProxyURL)
 	if err != nil {
