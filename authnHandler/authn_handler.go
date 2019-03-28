@@ -14,6 +14,8 @@ import (
 
 	"gopkg.in/square/go-jose.v2"
 	"gopkg.in/square/go-jose.v2/jwt"
+
+	"github.com/Symantec/keymaster/lib/instrumentedwriter"
 )
 
 type OpenIDConfig struct {
@@ -415,6 +417,11 @@ func (h *AuthNHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Header.Set("X-Remote-User", authUser)
+
+	_, ok := w.(*instrumentedwriter.LoggingWriter)
+	if ok {
+		w.(*instrumentedwriter.LoggingWriter).SetUsername(authUser)
+	}
 
 	h.handler.ServeHTTP(w, r)
 }

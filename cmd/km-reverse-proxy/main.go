@@ -10,14 +10,29 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"path/filepath"
 	"time"
 
+	"github.com/Symantec/keymaster/lib/instrumentedwriter"
 	"github.com/cviecco/km-reverse-proxy/authnHandler"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var (
 	configFilename = flag.String("config", "config.yml", "Configuration filename")
 )
+
+type httpLogger struct {
+	AccessLogger *log.Logger
+}
+
+func (l httpLogger) Log(record instrumentedwriter.LogRecord) {
+	if l.AccessLogger != nil {
+		l.AccessLogger.Printf("%s -  %s [%s] \"%s %s %s\" %d %d \"%s\"\n",
+			record.Ip, record.Username, record.Time, record.Method,
+			record.Uri, record.Protocol, record.Status, record.Size, record.UserAgent)
+	}
+}
 
 func main() {
 	flag.Parse()
@@ -26,7 +41,15 @@ func main() {
 		log.Fatalf("Cannot load Configuration: %s\n", err)
 	}
 
-	//log.Printf("%+v", staticConfig)
+	l := &lumberjack.Logger{
+		Filename:   filepath.Join(staticConfig.Base.LogDirectory, "access"),
+		MaxSize:    20, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28,   //days
+		Compress:   true, // disabled by default
+	}
+
+	accessLogger := httpLogger{AccessLogger: log.New(l, "", 0)}
 
 	origin, err := url.Parse(staticConfig.Base.ReverseProxyURL)
 	if err != nil {
@@ -79,6 +102,7 @@ func main() {
 	server := &http.Server{
 		Addr: addr,
 		//Handler:      NewLoggingHandler(http.DefaultServeMux, l),
+		Handler:      instrumentedwriter.NewLoggingHandler(http.DefaultServeMux, accessLogger),
 		TLSConfig:    tlsConfig,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,

@@ -18,6 +18,7 @@ type BaseConfig struct {
 	ClientCAFilename            string `yaml:"client_ca_filename"`
 	PathConfigLocation          string `yaml:"path_config_location"`
 	ClusterSharedSecretFilename string `yaml:"cluster_shared_secret_filename"`
+	LogDirectory                string `yaml:"log_directory"`
 	SharedSecrets               []string
 }
 
@@ -92,6 +93,10 @@ func LoadVerifyConfigFile(configFilename string) (*StaticConfiguration, error) {
 	// setup defaults
 	if config.Base.ServicePort == 0 {
 		config.Base.ServicePort = 22443
+		//constants.DefaultStatusPort
+	}
+	if config.Base.LogDirectory == "" {
+		config.Base.LogDirectory = "/tmp"
 		//constants.DefaultStatusPort
 	}
 	/*
