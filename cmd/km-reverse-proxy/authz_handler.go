@@ -60,10 +60,12 @@ func (h *AuthZHandler) LoadConfig() error {
 		sort.Strings(pathConfig.AllowedGroups)
 		sort.Strings(pathConfig.AllowedUsers)
 	}
+	// NOTE paths are sorted in reverse order so that when traversing the first subpath match
+	// is the longset prefix match
 	sort.SliceStable(config.ProtectedPaths,
-		func(i, j int) bool { return config.ProtectedPaths[i].Path < config.ProtectedPaths[j].Path })
+		func(i, j int) bool { return config.ProtectedPaths[i].Path > config.ProtectedPaths[j].Path })
 	h.currentConfig = &config
-	log.Printf("%+v", config)
+	//log.Printf("%+v", config)
 	return nil
 }
 
@@ -155,9 +157,11 @@ func (h *AuthZHandler) canUserAccessRequest(username string, r *http.Request) (b
 	sort.Strings(userGroups)
 	cleanPath := path.Clean(r.URL.Path)
 	for _, pathConfig := range h.currentConfig.ProtectedPaths {
+		//log.Printf("cleanPath=%s pathConfig.Path=%s", cleanPath, pathConfig.Path)
 		if !strings.HasPrefix(cleanPath, pathConfig.Path) {
 			continue
 		}
+		//log.Printf("postfilter")
 		allowedGroupLen := len(pathConfig.AllowedGroups)
 		for _, groupName := range userGroups {
 			groupIndex := sort.SearchStrings(pathConfig.AllowedGroups, groupName)
@@ -169,6 +173,9 @@ func (h *AuthZHandler) canUserAccessRequest(username string, r *http.Request) (b
 				return true, nil
 			}
 		}
+		// This break is to guarantee that once a path is found no more generic paths
+		// are used for permission checks
+		break
 
 	}
 	return false, nil
