@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/x509"
 	"errors"
 	"log"
 	"net/http"
@@ -39,6 +40,7 @@ type AuthZHandler struct {
 	userinfoMutex  sync.Mutex
 	userInfo       map[string]UserInfoCacheEntry
 	ldapConfig     *UserInfoLDAPSource
+	ldapCertPool   *x509.CertPool
 }
 
 func (h *AuthZHandler) LoadConfig() error {
@@ -104,7 +106,7 @@ func (h *AuthZHandler) getUserGroupsLDAP(username string) ([]string, error) {
 		}
 		groups, err := authutil.GetLDAPUserGroups(*u,
 			ldapConfig.BindUsername, ldapConfig.BindPassword,
-			timeoutSecs, nil, username,
+			timeoutSecs, h.ldapCertPool, username,
 			ldapConfig.UserSearchBaseDNs, ldapConfig.UserSearchFilter,
 			ldapConfig.GroupSearchBaseDNs, ldapConfig.GroupSearchFilter)
 		if err != nil {
