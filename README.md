@@ -1,6 +1,7 @@
 # km-reverse-proxy
 
 [![Build Status](https://travis-ci.org/cviecco/km-reverse-proxy.svg?branch=master)](https://travis-ci.org/cviecco/km-reverse-proxy)
+[![Coverage Status](https://coveralls.io/repos/github/cviecco/km-reverse-proxy/badge.svg?branch=master)](https://coveralls.io/github/cviecco/km-reverse-proxy?branch=master)
 
 This is a simple revse proxy to use with Symantec's [keymaster][https://github.com/Symantec/keymaster] or
 any other openid connect compliant identity service or any cerificate based identity service. The goal
