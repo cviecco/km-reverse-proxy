@@ -34,12 +34,7 @@ func (l httpLogger) Log(record instrumentedwriter.LogRecord) {
 	}
 }
 
-func main() {
-	flag.Parse()
-	staticConfig, err := LoadVerifyConfigFile(*configFilename)
-	if err != nil {
-		log.Fatalf("Cannot load Configuration: %s\n", err)
-	}
+func getServerFromConfig(staticConfig *StaticConfiguration) (*http.Server, error) {
 
 	l := &lumberjack.Logger{
 		Filename:   filepath.Join(staticConfig.Base.LogDirectory, "access"),
@@ -108,6 +103,19 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
+	return server, nil
+	//log.Fatal(server.ListenAndServeTLS(staticConfig.Base.TLSCertFilename, staticConfig.Base.TLSKeyFilename))
+}
+
+func main() {
+	flag.Parse()
+	staticConfig, err := LoadVerifyConfigFile(*configFilename)
+	if err != nil {
+		log.Fatalf("Cannot load Configuration: %s\n", err)
+	}
+	server, err := getServerFromConfig(staticConfig)
+	if err != nil {
+		log.Fatalf("Cannot initialze server from config: %s\n", err)
+	}
 	log.Fatal(server.ListenAndServeTLS(staticConfig.Base.TLSCertFilename, staticConfig.Base.TLSKeyFilename))
-	//log.Fatal(http.ListenAndServeTLS(addr, staticConfig.Base.TLSCertFilename, staticConfig.Base.TLSKeyFilename, nil))
 }
