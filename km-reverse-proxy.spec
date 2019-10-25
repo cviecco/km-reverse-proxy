@@ -1,6 +1,6 @@
 Name:           km-reverse-proxy
 Version:        0.1.0
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Reverse proxy service for http resources
 
 #Group:

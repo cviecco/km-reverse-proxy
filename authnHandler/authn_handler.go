@@ -411,6 +411,7 @@ func (h *AuthNHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Header.Set("X-Remote-User", authUser)
+	r.Header.Set("X-Forwarded-User", authUser)
 
 	_, ok := w.(*instrumentedwriter.LoggingWriter)
 	if ok {
